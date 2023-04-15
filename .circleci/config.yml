@@ -139,6 +139,32 @@ jobs:
       - destroy-environment:
           when: on_fail
 
+  configure-infrastructure:
+    docker:
+      - image: python:3.9.0-alpine
+    steps:
+      - checkout
+      - add_ssh_keys:
+          fingerprints: ["fe:19:6f:08:16:31:6e:7a:fe:7b:00:7e:04:7c:09:7b"]
+      - attach_workspace:
+          at: .
+      - run:
+          name: Install dependencies
+          command: |
+            apk add tar unzip curl
+            apk add --no-cache aws-cli
+            aws --version
+            apk add --update ansible
+            ansible --version
+      - run:
+          name: Configure server
+          command: |
+            cd ./.circleci/ansible/
+            ansible-playbook -i inventory configure-server.yml
+      # Here's where you will add some code to rollback on failure    
+      - destroy-environment:
+          when: on_fail
+          
 workflows:
   default:
     jobs:

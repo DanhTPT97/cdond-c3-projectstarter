@@ -154,8 +154,11 @@ jobs:
             apk add tar unzip curl
             apk add --no-cache aws-cli
             aws --version
-            apk add --update ansible
-            ansible --version
+            sudo apt update
+            sudo apt install software-properties-common -y
+            sudo add-apt-repository --yes --update ppa:ansible/ansible
+            sudo apt install ansible -y
+            pip3 -U paramiko
       - run:
           name: Configure server
           command: |

@@ -224,7 +224,7 @@ jobs:
             cd backend
             ls
             cat dump
-            if grep -q "No migrations are pending" temp
+            if grep -q "No migrations are pending" dump
             then
               echo "stash success status to kvdb.io"
               echo "https://kvdb.io/7631EfVEMJ6GBr6zssg4RU/migration_${CIRCLE_WORKFLOW_ID:0:7}"

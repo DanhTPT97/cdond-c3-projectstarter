@@ -4,6 +4,8 @@ commands:
   destroy-environment:
     description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
     parameters:
+      id:
+        type: string
       when:
         type: string   
     steps:
@@ -11,9 +13,9 @@ commands:
           name: Destroy environments
           when: on_fail
           command: |
-            aws s3 rm "s3://udapeople-${CIRCLE_WORKFLOW_ID:0:7}" --recursive
-            aws cloudformation delete-stack --stack-name "udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}"
-            aws cloudformation delete-stack --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}"
+            aws s3 rm "s3://udapeople-<< parameters.id >>" --recursive
+            aws cloudformation delete-stack --stack-name "udapeople-frontend-<< parameters.id >>"
+            aws cloudformation delete-stack --stack-name "udapeople-backend-<< parameters.id >>"
             echo "done"
   revert-migrations:
     description: Revert the last migration if successfully run in the current workflow.
@@ -159,8 +161,8 @@ jobs:
           root: .
           paths:
             - .circleci/ansible/inventory
-      # Here's where you will add some code to rollback on failure
       - destroy-environment:
+          id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
 
   configure-infrastructure:
@@ -189,8 +191,8 @@ jobs:
           command: |
             cd ./.circleci/ansible/
             ansible-playbook -i inventory configure-server.yml
-      # Here's where you will add some code to rollback on failure    
       - destroy-environment:
+          id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
 
   run-migrations:
@@ -232,8 +234,8 @@ jobs:
               echo "https://kvdb.io/7631EfVEMJ6GBr6zssg4RU/migration_${CIRCLE_WORKFLOW_ID:0:7}"
               curl -k -d '0' https://kvdb.io/7631EfVEMJ6GBr6zssg4RU/migration_${CIRCLE_WORKFLOW_ID:0:7}
             fi
-     # Here's where you will add some code to rollback on failure 
       - destroy-environment:
+          id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
 
   deploy-frontend:
@@ -272,6 +274,7 @@ jobs:
             aws s3 cp dist s3://udapeople-${CIRCLE_WORKFLOW_ID:0:7} --recursive
       
       - destroy-environment:
+          id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
       - revert-migrations:
           id: ${CIRCLE_WORKFLOW_ID:0:7}
@@ -307,8 +310,8 @@ jobs:
             echo "Contents  of the inventory file is -------"
             cat inventory
             ansible-playbook -i inventory deploy-backend.yml
-      # Here's where you will add some code to rollback on failure
       - destroy-environment:
+          id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
       - revert-migrations:
           id: ${CIRCLE_WORKFLOW_ID:0:7}
@@ -354,11 +357,53 @@ jobs:
             echo ${URL} 
             if curl -s ${URL} | grep "Welcome"
             then
-              return 1
+              return 0
             else
               return 1
             fi
       - destroy-environment:
+          id: ${CIRCLE_WORKFLOW_ID:0:7}
+          when: on_fail
+      - revert-migrations:
+          id: ${CIRCLE_WORKFLOW_ID:0:7}
+          when: on_fail
+
+  cloudfront-update:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            yum -y install tar gzip awscli curl npm nodejs
+      - attach_workspace:
+          at: .
+      - run:
+          name: stash current workflow id
+          command: |
+            curl -k -d ${CIRCLE_WORKFLOW_ID:0:7} https://kvdb.io/7631EfVEMJ6GBr6zssg4RU/migration
+      - run:
+          name: Update cloudfront distribution
+          command: |
+            export OldWorkflowIDstack=$(aws cloudformation \
+              list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
+              --no-paginate --output text)
+            OldWorkflowID=${OldWorkflowIDstack:10:7}
+            echo ${OldWorkflowID} > oldId
+            aws cloudformation deploy \
+              --template-file .circleci/files/cloudfront.yml \
+              --stack-name InitialStack \
+              --parameter-overrides WorkflowID="${CIRCLE_WORKFLOW_ID:0:7}" \
+              --tags project=udapeople
+            echo OldWorkflowID: ${OldWorkflowID}
+            echo Current work flow ID: ${CIRCLE_WORKFLOW_ID:0:7}
+      - persist_to_workspace:
+          root: .
+          paths:
+            - ./oldId
+      - destroy-environment:
+          id: ${CIRCLE_WORKFLOW_ID:0:7}
           when: on_fail
       - revert-migrations:
           id: ${CIRCLE_WORKFLOW_ID:0:7}
@@ -392,3 +437,5 @@ workflows:
           requires: [run-migrations]
       - smoke-test:
           requires: [deploy-backend, deploy-frontend]
+      - cloudfront-update:
+          requires: [smoke-test]

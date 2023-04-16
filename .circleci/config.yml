@@ -387,7 +387,7 @@ jobs:
           name: Update cloudfront distribution
           command: |
             export OldWorkflowIDstack=$(aws cloudformation \
-              list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
+              list-exports --query "Exports[?Name=='WorkflowID'].Value" \
               --no-paginate --output text)
             OldWorkflowID=${OldWorkflowIDstack:10:7}
             echo ${OldWorkflowID} > oldId
@@ -425,10 +425,6 @@ jobs:
             pwd
             ls
             cat ./oldId
-            # export OldWorkflowIDstack=$(aws cloudformation \
-            #   list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
-            #   --no-paginate --output text)
-            # OldWorkflowID=${OldWorkflowIDstack:10:7}
             OldWorkflowID=$(cat ./oldId)
             echo Old workflow Id: ${OldWorkflowID}
             if [[ "${CIRCLE_WORKFLOW_ID:0:7}" != "${OldWorkflowID}" ]]
